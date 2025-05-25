@@ -188,7 +188,6 @@ public class CodeGenConfig
 - [ ] 支持指定实体生成 | Support specific entity generation：`./TemplateGenCli.exe -entity User,Product`
 - [ ] 支持CRUD模板生成 | Support CRUD template generation
 - [ ] 支持自定义模板文件 | Support custom template files
-- [ ] 支持更多ORM框架 | Support more ORM frameworks
 
 ## 贡献指南 | Contributing
 
