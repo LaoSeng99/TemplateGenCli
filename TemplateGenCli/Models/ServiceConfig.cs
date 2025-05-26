@@ -9,6 +9,7 @@ public class ServiceConfig : IGeneratorConfig
     public string Namespace { get; set; }
     public string InterfaceOutput { get; set; }
     public string InterfaceNamespace { get; set; }
+    public string RepoInterfaceNamespace { get; set; }
     public string StartMark { get; set; }
     public string EndMark { get; set; }
     public string DiFilePath { get; set; }

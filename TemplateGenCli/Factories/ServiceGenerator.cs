@@ -82,8 +82,7 @@ public interface I{entity}Service
 }}";
 
     private string GenerateImplCode(string entity, ServiceConfig config) => $@"using {config.InterfaceNamespace};
-using {config.Namespace};
-using {config.Namespace}.Interfaces;
+using {config.RepoInterfaceNamespace};
 
 namespace {config.Namespace};
 
