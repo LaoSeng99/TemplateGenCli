@@ -13,6 +13,7 @@ public static class GeneratorFactory
             GeneratorType.Mapster => new MapsterGenerator(),
             GeneratorType.Service => new ServiceGenerator(),
             GeneratorType.Repository => new RepositoryGenerator(),
+            GeneratorType.Dto => new DtoGenerator(),
             _ => null
         };
     }

@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using TemplateGenCli.Extensions;
 using TemplateGenCli.Interfaces;
 using TemplateGenCli.Models;
 
@@ -9,6 +10,9 @@ public class RepositoryGenerator : IGenerator
     {
         var repoConfig = (RepositoryConfig)config;
         var entityConfig = context.EntityConfig;
+        var structureConfig = context.StructureConfig;
+        var oriNamespace = repoConfig.Namespace;
+        var oriInterfacesNamespace = repoConfig.InterfaceNamespace;
 
         if (!Directory.Exists(entityConfig.Path))
         {
@@ -19,19 +23,7 @@ public class RepositoryGenerator : IGenerator
         Directory.CreateDirectory(repoConfig.OutputPath);
         Directory.CreateDirectory(repoConfig.InterfaceOutput);
 
-        if (entityConfig.ExceptEntities.Any(e => e.Contains(" ")))
-        {
-            Console.WriteLine("Warning: Entity exclusion list may contain invalid names. Make sure they match exact entity class names.");
-        }
-        var excluded = new HashSet<string>(
-          entityConfig.ExceptEntities ?? Enumerable.Empty<string>(),
-          StringComparer.OrdinalIgnoreCase
-      );
-        var entityFiles = Directory.GetFiles(entityConfig.Path, "*.cs")
-                     .Select(Path.GetFileNameWithoutExtension)
-                     .Where(name => !string.IsNullOrEmpty(name) && !excluded.Contains(name))
-                     .ToList();
-
+        var entityFiles = entityConfig.Path.GetEntitiesFilePath(entityConfig.ExceptEntities);
         if (entityFiles.Count == 0)
         {
             Console.WriteLine("No entity files found.");
@@ -42,16 +34,49 @@ public class RepositoryGenerator : IGenerator
         foreach (var file in entityFiles)
         {
             var entityName = Path.GetFileNameWithoutExtension(file);
-            if (string.IsNullOrEmpty(entityName))
+            if (string.IsNullOrEmpty(entityName) || string.IsNullOrEmpty(file))
             {
                 Console.WriteLine($"Skipping empty file: {file}");
                 continue;
             }
+
             var interfaceName = $"I{entityName}Repository";
             var className = $"{entityName}Repository";
 
+            string modularName = "";
+            if (structureConfig.Enable)
+            {
+                modularName = file.GetModularName(structureConfig.ModularAttributeName);
+                if (string.IsNullOrEmpty(modularName))
+                {
+                    Console.WriteLine($"Modular name not found in file: {file}");
+                }
+                else
+                {
+                    repoConfig.Namespace = $"{oriNamespace}.{modularName}";
+                    repoConfig.InterfaceNamespace = $"{oriInterfacesNamespace}.{modularName}";
+
+                    if (structureConfig.RepoInterfaceModular)
+                    {
+                        var path = Path.Combine(repoConfig.InterfaceOutput, modularName);
+                        Directory.CreateDirectory(path);
+                    }
+
+                    if (structureConfig.RepoImplModular)
+                    {
+                        var path = Path.Combine(repoConfig.OutputPath, modularName);
+                        Directory.CreateDirectory(path);
+                    }
+                }
+            }
+
             // 1. Interface
-            var interfacePath = Path.Combine(repoConfig.InterfaceOutput, $"{interfaceName}.cs");
+            var interfacePath = Path.Combine(
+                repoConfig.InterfaceOutput,
+                structureConfig.RepoInterfaceModular ? modularName : "",
+                $"{interfaceName}.cs"
+                );
+
             if (!File.Exists(interfacePath))
             {
                 var interfaceCode = GenerateInterfaceCode(entityName, repoConfig, context);
@@ -60,7 +85,12 @@ public class RepositoryGenerator : IGenerator
             }
 
             // 2. Implementation
-            var implPath = Path.Combine(repoConfig.OutputPath, $"{className}.cs");
+            var implPath = Path.Combine(
+                repoConfig.OutputPath,
+                structureConfig.RepoInterfaceModular ? modularName : "",
+                $"{className}.cs"
+                );
+
             if (!File.Exists(implPath))
             {
                 var implCode = GenerateImplCode(entityName, repoConfig, context);
@@ -102,58 +132,6 @@ public class {entity}Repository({config.DbContext} _db) : RepositoryBase<{entity
         return asNoTracking ? query.AsNoTracking() : query;
     }}  
     // Implement the method
-    #region VM Method
-    #endregion
-    //Rewrite the GetAllAsync method
-    protected override Task<IQueryable<{entity}>> BuildQueryAsync()
-    {{
-       //Default query no action
-        return Task.FromResult(_db.Set<{entity}>().AsQueryable());
-
-        // Do you query here
-        // var query = _db.TableNames.AsNoTracking();
-        // return Task.FromResult(query);    
-     }}
-
-    //Rewrite the GetWithIncludesAsync method
-    protected override Task<IQueryable<{entity}>> BuildQueryWithIncludesAsync()
-    {{
-        //Default query no action
-        return Task.FromResult(_db.Set<{entity}>().AsQueryable());
-
-        // Do you query here
-        // var query = _db.TableNames.AsNoTracking();
-        // return Task.FromResult(query);    
-    }}
-
-     //Rewrite the GetSingleAsync method
-    protected override Task<IQueryable<{entity}>> BuildGetByIdQueryAsync()
-    {{
-        //Default query no action
-        return Task.FromResult(_db.Set<{entity}>().AsQueryable());
-
-        // Do you query here
-        // var query = _db.TableNames;
-        // return Task.FromResult(query);    
-    }}
-
-    //Add the method that want to perform before delete the entity
-    protected override async Task BeforeRemove({entity} entity)
-    {{
-    //Do you logic here
-    }}
-
-    //Add the method that want to perform before add the entity
-    protected override async Task BeforeAdd({entity} entity)
-    {{
-        //Do you logic here
-    }}
-
-    //Add the method that want to perform before update the entity
-    protected override async Task BeforeUpdate({entity} entity)
-    {{
-        //Do you logic here
-    }}
 }}";
 
     private void InjectToDIFile(string filePath, List<string> injectLines, string startMark, string endMark)

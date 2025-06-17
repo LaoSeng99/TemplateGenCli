@@ -11,12 +11,13 @@ public class CodeGenManager
     private readonly GeneratorContext _context;
     public CodeGenManager(CodeGenConfig codeGenConfig)
     {
-        _context = new GeneratorContext(codeGenConfig.EntityConfig);
+        _context = new GeneratorContext(codeGenConfig.EntityConfig,codeGenConfig.StructureConfig);
         _configs = new List<IGeneratorConfig>
         {
             codeGenConfig.MapsterConfig,
             codeGenConfig.ServiceConfig,
-            codeGenConfig.RepositoryConfig
+            codeGenConfig.RepositoryConfig,
+            codeGenConfig.DtoConfig
         };
     }
 

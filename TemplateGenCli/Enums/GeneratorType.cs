@@ -4,4 +4,5 @@ public enum GeneratorType
     Repository,
     Service,
     Mapster,
+    Dto
 }

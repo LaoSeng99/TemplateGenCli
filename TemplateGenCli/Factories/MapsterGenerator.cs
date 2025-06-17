@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using TemplateGenCli.Extensions;
 using TemplateGenCli.Interfaces;
 using TemplateGenCli.Models;
 
@@ -10,7 +11,8 @@ public class MapsterGenerator() : IGenerator
     {
         var mapsterConfig = (MapsterConfig)config;
         var entityConfig = context.EntityConfig;
-
+        var structureConfig = context.StructureConfig;
+        var oriNamespace = mapsterConfig.Namespace;
         if (!Directory.Exists(entityConfig.Path))
         {
             Console.WriteLine($"Entities path not found: {entityConfig.Path}");
@@ -19,16 +21,7 @@ public class MapsterGenerator() : IGenerator
 
         Directory.CreateDirectory(mapsterConfig.OutputPath);
 
-        var excluded = new HashSet<string>(
-               entityConfig.ExceptEntities ?? Enumerable.Empty<string>(),
-               StringComparer.OrdinalIgnoreCase
-           );
-
-        var entityFiles = Directory.GetFiles(entityConfig.Path, "*.cs")
-                     .Select(Path.GetFileNameWithoutExtension)
-                     .Where(name => !string.IsNullOrEmpty(name) && !excluded.Contains(name))
-                     .ToList();
-
+        var entityFiles = entityConfig.Path.GetEntitiesFilePath(entityConfig.ExceptEntities);
         if (entityFiles.Count == 0)
         {
             Console.WriteLine("No entity files found.");
@@ -39,12 +32,36 @@ public class MapsterGenerator() : IGenerator
         foreach (var file in entityFiles)
         {
             var entityName = Path.GetFileNameWithoutExtension(file);
-            if (string.IsNullOrEmpty(entityName))
+            if (string.IsNullOrEmpty(entityName) || string.IsNullOrEmpty(file))
             {
                 Console.WriteLine($"Skipping empty file: {file}");
                 continue;
             }
-            var targetFile = Path.Combine(mapsterConfig.OutputPath, $"{entityName}MapsterConfig.cs");
+
+            string modularName = "";
+            if (structureConfig.Enable)
+            {
+                modularName = file.GetModularName(structureConfig.ModularAttributeName);
+                if (string.IsNullOrEmpty(modularName))
+                {
+                    Console.WriteLine($"Modular name not found in file: {file}");
+                }
+                else
+                {
+                    mapsterConfig.Namespace = $"{oriNamespace}.{modularName}";
+                    if (structureConfig.MapsterModular)
+                    {
+                        var path = Path.Combine(mapsterConfig.OutputPath, modularName);
+                        Directory.CreateDirectory(path);
+                    }
+                }
+            }
+
+            var targetFile = Path.Combine(
+                mapsterConfig.OutputPath,
+                structureConfig.MapsterModular ? modularName : "",
+                $"{entityName}MapsterConfig.cs"
+                );
 
             if (!File.Exists(targetFile))
             {

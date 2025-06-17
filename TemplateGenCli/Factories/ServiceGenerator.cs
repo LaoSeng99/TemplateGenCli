@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using TemplateGenCli.Extensions;
 using TemplateGenCli.Interfaces;
 using TemplateGenCli.Models;
 
@@ -9,6 +10,10 @@ public class ServiceGenerator : IGenerator
     {
         var svcConfig = (ServiceConfig)config;
         var entityConfig = context.EntityConfig;
+        var structureConfig = context.StructureConfig;
+        var oriNamespace = svcConfig.Namespace;
+        var oriInterfacesNamespace = svcConfig.InterfaceNamespace;
+        var oriRepoInterfacesNamespace = svcConfig.RepoInterfaceNamespace;
 
         if (!Directory.Exists(entityConfig.Path))
         {
@@ -19,37 +24,62 @@ public class ServiceGenerator : IGenerator
         Directory.CreateDirectory(svcConfig.OutputPath);
         Directory.CreateDirectory(svcConfig.InterfaceOutput);
 
-        var excluded = new HashSet<string>(
-          entityConfig.ExceptEntities ?? Enumerable.Empty<string>(),
-          StringComparer.OrdinalIgnoreCase
-      );
-        var entityFiles = Directory.GetFiles(entityConfig.Path, "*.cs")
-                                   .Select(Path.GetFileNameWithoutExtension)
-                                   .Where(name => !string.IsNullOrEmpty(name) && !excluded.Contains(name))
-                                   .ToList();
+        if (entityConfig.ExceptEntities.Any(e => e.Contains(" ")))
+        {
+            Console.WriteLine("Warning: Entity exclusion list may contain invalid names. Make sure they match exact entity class names.");
+        }
 
+        var entityFiles = entityConfig.Path.GetEntitiesFilePath(entityConfig.ExceptEntities);
         if (entityFiles.Count == 0)
         {
-            Console.WriteLine("No valid entity files found.");
+            Console.WriteLine("No entity files found.");
             return;
         }
 
         var newInjectLines = new List<string>();
-
         foreach (var file in entityFiles)
         {
             var entityName = Path.GetFileNameWithoutExtension(file);
-            if (string.IsNullOrEmpty(entityName))
+            if (string.IsNullOrEmpty(entityName) || string.IsNullOrEmpty(file))
             {
                 Console.WriteLine($"Skipping empty file: {file}");
                 continue;
+            }
+
+            string modularName = "";
+            if (structureConfig.Enable)
+            {
+                modularName = file.GetModularName(structureConfig.ModularAttributeName);
+                if (string.IsNullOrEmpty(modularName))
+                {
+                    Console.WriteLine($"Modular name not found in file: {file}");
+                }
+                else
+                {
+                    svcConfig.Namespace = $"{oriNamespace}.{modularName}";
+                    svcConfig.InterfaceNamespace = $"{oriInterfacesNamespace}.{modularName}";
+                    svcConfig.RepoInterfaceNamespace = $"{oriRepoInterfacesNamespace}.{modularName}";
+                    if (structureConfig.ServiceInterfaceModular)
+                    {
+                        var path = Path.Combine(svcConfig.InterfaceOutput, modularName);
+                        Directory.CreateDirectory(path);
+
+                        var outputPath = Path.Combine(svcConfig.OutputPath, modularName);
+                        Directory.CreateDirectory(outputPath);
+                    }
+                }
             }
 
             var interfaceName = $"I{entityName}Service";
             var className = $"{entityName}Service";
 
             // 1. Interface
-            var interfacePath = Path.Combine(svcConfig.InterfaceOutput, $"{interfaceName}.cs");
+            var interfacePath = Path.Combine(
+                svcConfig.InterfaceOutput,
+                structureConfig.ServiceInterfaceModular ? modularName : "",
+                $"{interfaceName}.cs"
+                );
+
             if (!File.Exists(interfacePath))
             {
                 var code = GenerateInterfaceCode(entityName, svcConfig);
@@ -58,7 +88,12 @@ public class ServiceGenerator : IGenerator
             }
 
             // 2. Implementation
-            var implPath = Path.Combine(svcConfig.OutputPath, $"{className}.cs");
+            var implPath = Path.Combine(
+                svcConfig.OutputPath,
+                structureConfig.ServiceImplModular ? modularName : "",
+                $"{className}.cs"
+                );
+
             if (!File.Exists(implPath))
             {
                 var code = GenerateImplCode(entityName, svcConfig);
@@ -91,7 +126,7 @@ public class {entity}Service(
     I{entity}Repository repo
 ) : I{entity}Service
 {{
-    #region VM/DTO Query Method 
+    #region DTO Query Method 
     #endregion
 }}";
 
